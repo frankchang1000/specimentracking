@@ -4,7 +4,7 @@ import mercury
 
 import RPi.GPIO as GPIO
 import time
-
+import pandas as pd
 
 #initalize the led
 GPIO.setmode(GPIO.BCM)
@@ -18,9 +18,11 @@ GPIO_ECHO = 26
 GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
 GPIO.setup(GPIO_ECHO, GPIO.IN)
 
-reader = mercury.Reader("tmr:///dev/ttyS0")
-reader.set_region("EU3")
-reader.set_read_plan([1], "GEN2")
+def initReader():
+    reader = mercury.Reader("tmr:///dev/ttyS0")
+    reader.set_region("EU3")
+    reader.set_read_plan([1], "GEN2")
+    return reader
 
 def distance():
     # set Trigger to HIGH
@@ -50,13 +52,10 @@ def distance():
     return distance
 
 def read_card():
-    reader = mercury.Reader("tmr:///dev/ttyS0")
-    reader.set_region("EU3")
-    reader.set_read_plan([1], "GEN2")
-    data=reader.read()
+    reader = initReader()
+    data = reader.read()
 
     if(data):
-        #GPIO.output(buzzer,GPIO.HIGH)
         b = data
         s = str(b)[1:-1]
         x = s.split("(")
@@ -69,25 +68,81 @@ def read_card():
         # when data is detected, turn on the led
         GPIO.output(led, GPIO.HIGH)
 
+        
+        # write the data to log file if the data is not already in the file
+        with open('tag_reads.txt', 'a+') as f:
+            if x not in f.read():
+                f.write(x + '\n')
+                f.close()
+                print("data written to file")
+            elif x in f.read():
+                print("data already in file")
+                f.close()
+
     else:
-        #GPIO.output(buzzer,GPIO.LOW)
         print("no data")
 
         # when no data is detected, turn off the led
         GPIO.output(led, GPIO.LOW)
     
+def authenticate():
+    username = str(input("Enter your username: "))
+    password = str(input("Enter your password: "))
+
+    # read the data from the excel file
+    usersFile = pd.read_excel('users.xls')
+
+    # check if user is in the file
+    if username in str(usersFile['username']):
+        # check if password is correct
+        if password == usersFile.loc[usersFile['username'] == username]['password'].values[0]:
+            print("User authenticated")
+            return True
+        else:
+            print("Password incorrect")
+            return False
+    else:
+        print("User not found")
+        return False
+
+
+def register():
+    username = input("Enter your username: ")
+    password = input("Enter your password: ")
+    # read the data from the file
+    usersFile = pd.read_excel('users.xls')
+
+    # check if user is in the file
+    if username in usersFile['username']:
+        print("User already exists")
+        return False
+    else:
+        # add the user to the file
+        usersFile.loc[len(usersFile)] = [username, password]
+        usersFile.to_excel('users.xls', index=False)
+        print("User registered")
+        return True
+
 
 if __name__ == '__main__':
     try:
-        while True:
-            dist = distance()
-            if dist <= 20:
-                read_card()
-            #print ("Measured Distance = %.1f cm" % dist)
-            time.sleep(0.5)
-            GPIO.output(led, GPIO.LOW)
- 
-        # Reset by pressing CTRL + C
+        choice = input("1. Authenticate\n2. Register\n3. Read card\n4. Exit\n")
+        if str(choice) == "1":
+            authenticate()
+        elif choice == "2":
+            register()
+        elif choice == "3":
+            while True:
+                dist = distance()
+                if dist <= 20:
+                    read_card()
+                #print ("Measured Distance = %.1f cm" % dist)
+                time.sleep(0.5)
+                GPIO.output(led, GPIO.LOW)
+        elif choice == "4":
+            print("Exiting")
+            GPIO.cleanup()
+    # Reset by pressing CTRL + C
     except KeyboardInterrupt:
         print("Measurement stopped by User")
         GPIO.cleanup()
