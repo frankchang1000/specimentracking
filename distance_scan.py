@@ -68,7 +68,6 @@ def read_card():
         # when data is detected, turn on the led
         GPIO.output(led, GPIO.HIGH)
 
-        
         # write the data to log file if the data is not already in the file
         with open('tag_reads.txt', 'a+') as f:
             if x not in f.read():
@@ -107,22 +106,26 @@ def authenticate():
 
 
 def register():
-    username = input("Enter your username: ")
-    password = input("Enter your password: ")
+    username = str(input("Enter your username: "))
+
     # read the data from the file
     usersFile = pd.read_excel('users.xls')
 
-    # check if user is in the file
-    if username in usersFile['username']:
+    # check if username is already in the file
+    if username in str(usersFile['username']):
         print("User already exists")
         return False
     else:
+        password = input("Enter your password: ")
         # add the user to the file
-        usersFile.loc[len(usersFile)] = [username, password]
-        usersFile.to_excel('users.xls', index=False)
+        append_df_to_excel(pd.DataFrame([[username, password]], columns=['username', 'password']), 'users.xls')
         print("User registered")
         return True
 
+def append_df_to_excel(df, excel_path):
+    df_excel = pd.read_excel(excel_path)
+    result = pd.concat([df_excel, df], ignore_index=True)
+    result.to_excel(excel_path, index=False)
 
 if __name__ == '__main__':
     try:
