@@ -5,6 +5,7 @@ import mercury
 import RPi.GPIO as GPIO
 import time
 import pandas as pd
+import datetime
 
 #initalize the led
 GPIO.setmode(GPIO.BCM)
@@ -55,6 +56,8 @@ def read_card():
     reader = initReader()
     data = reader.read()
 
+    tagFile = pd.read_excel('tags.xls')
+
     if(data):
         b = data
         s = str(b)[1:-1]
@@ -68,16 +71,14 @@ def read_card():
         # when data is detected, turn on the led
         GPIO.output(led, GPIO.HIGH)
 
-        # write the data to log file if the data is not already in the file
-        with open('tag_reads.txt', 'a+') as f:
-            if x not in f.read():
-                f.write(x + '\n')
-                f.close()
-                print("data written to file")
-            elif x in f.read():
-                print("data already in file")
-                f.close()
 
+        # if tag is not already in the file, write the tag to the file
+        # write current date and time to the file
+        if x not in str(tagFile['tag']):
+            append_df_to_excel(pd.DataFrame([[x, datetime.datetime.now()]], columns=['tag', 'time']), 'tags.xls')
+
+
+    
     else:
         print("no data")
 
@@ -129,20 +130,19 @@ def append_df_to_excel(df, excel_path):
 
 if __name__ == '__main__':
     try:
-        choice = input("1. Authenticate\n2. Register\n3. Read card\n4. Exit\n")
+        choice = input("1. Authenticate\n2. Register\n3. Exit\n")
         if str(choice) == "1":
-            authenticate()
+            if authenticate():
+                while True:
+                    dist = distance()
+                    if dist <= 20:
+                        read_card()
+                    #print ("Measured Distance = %.1f cm" % dist)
+                    time.sleep(0.5)
+                    GPIO.output(led, GPIO.LOW)
         elif choice == "2":
             register()
-        elif choice == "3":
-            while True:
-                dist = distance()
-                if dist <= 20:
-                    read_card()
-                #print ("Measured Distance = %.1f cm" % dist)
-                time.sleep(0.5)
-                GPIO.output(led, GPIO.LOW)
-        elif choice == "4":
+        else:
             print("Exiting")
             GPIO.cleanup()
     # Reset by pressing CTRL + C
