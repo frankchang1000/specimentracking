@@ -19,6 +19,8 @@ GPIO_ECHO = 26
 GPIO.setup(GPIO_TRIGGER, GPIO.OUT)
 GPIO.setup(GPIO_ECHO, GPIO.IN)
 
+username = ""
+
 def initReader():
     reader = mercury.Reader("tmr:///dev/ttyS0")
     reader.set_region("EU3")
@@ -52,11 +54,16 @@ def distance():
  
     return distance
 
-def read_card():
+def read_card(checkIn):
     reader = initReader()
     data = reader.read()
 
+    global username
+
     tagFile = pd.read_excel('tags.xls')
+
+    # ask if user wants to check in or out
+
 
     if(data):
         b = data
@@ -72,12 +79,12 @@ def read_card():
         GPIO.output(led, GPIO.HIGH)
 
 
-        # if tag is not already in the file, write the tag to the file
-        # write current date and time to the file
-        if x not in str(tagFile['tag']):
-            append_df_to_excel(pd.DataFrame([[x, datetime.datetime.now()]], columns=['tag', 'time']), 'tags.xls')
-
-
+        if checkIn == "i":
+            # write tag, current time, username and check in to the file
+            append_df_to_excel(pd.DataFrame([[x, datetime.datetime.now(), username, "in"]], columns=['tag', 'time', 'user', 'in/out']), 'tags.xls')
+        if checkIn == "o":
+            # write tag, current time, username and check out to the file
+            append_df_to_excel(pd.DataFrame([[x, datetime.datetime.now(), username, "out"]], columns=['tag', 'time', 'user', 'in/out']), 'tags.xls')
     
     else:
         print("no data")
@@ -86,6 +93,7 @@ def read_card():
         GPIO.output(led, GPIO.LOW)
     
 def authenticate():
+    global username
     username = str(input("Enter your username: "))
     password = str(input("Enter your password: "))
 
@@ -93,7 +101,7 @@ def authenticate():
     usersFile = pd.read_excel('users.xls')
 
     # check if user is in the file
-    if username in str(usersFile['username']):
+    if str(username) in str(usersFile['username']):
         # check if password is correct
         if password == usersFile.loc[usersFile['username'] == username]['password'].values[0]:
             print("User authenticated")
@@ -125,18 +133,19 @@ def register():
 
 def append_df_to_excel(df, excel_path):
     df_excel = pd.read_excel(excel_path)
-    result = pd.concat([df_excel, df], ignore_index=True)
+    result = pd.concat([df_excel, df], ignore_index=True, sort=True)
     result.to_excel(excel_path, index=False)
 
 if __name__ == '__main__':
     try:
-        choice = input("1. Authenticate\n2. Register\n3. Exit\n")
+        choice = str(input("1. Authenticate\n2. Register\n3. Exit\n"))
         if str(choice) == "1":
             if authenticate():
+                checkIn = input("Checking in or out? (i/o): ")
                 while True:
                     dist = distance()
                     if dist <= 20:
-                        read_card()
+                        read_card(checkIn)
                     #print ("Measured Distance = %.1f cm" % dist)
                     time.sleep(0.5)
                     GPIO.output(led, GPIO.LOW)
