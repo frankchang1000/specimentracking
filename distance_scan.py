@@ -6,6 +6,7 @@ import RPi.GPIO as GPIO
 import time
 import pandas as pd
 import datetime
+import sqlite3 as sql
 
 #initalize the led
 GPIO.setmode(GPIO.BCM)
@@ -97,38 +98,38 @@ def authenticate():
     username = str(input("Enter your username: "))
     password = str(input("Enter your password: "))
 
-    # read the data from the excel file
-    usersFile = pd.read_excel('users.xls')
-
-    # check if user is in the file
-    if str(username) in str(usersFile['username']):
-        # check if password is correct
-        if password == usersFile.loc[usersFile['username'] == username]['password'].values[0]:
-            print("User authenticated")
+    # check if username is in database.db
+    conn = sql.connect('database.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = '" + username + "'")
+    if c.fetchone():
+        c.execute("SELECT * FROM users WHERE username = '" + username + "' AND password = '" + password + "'")
+        if c.fetchone():
             return True
         else:
-            print("Password incorrect")
+            print("Incorrect password")
             return False
     else:
-        print("User not found")
+        print("Username does not exist")
         return False
+
 
 
 def register():
     username = str(input("Enter your username: "))
 
-    # read the data from the file
-    usersFile = pd.read_excel('users.xls')
-
-    # check if username is already in the file
-    if username in str(usersFile['username']):
-        print("User already exists")
+    # check if username is in database.db
+    conn = sql.connect('database.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = '" + username + "'")
+    if c.fetchone():
+        print("Username already exists")
         return False
     else:
-        password = input("Enter your password: ")
-        # add the user to the file
-        append_df_to_excel(pd.DataFrame([[username, password]], columns=['username', 'password']), 'users.xls')
-        print("User registered")
+        password = str(input("Enter your password: "))
+        c.execute("INSERT INTO users (username, password) VALUES ('" + username + "', '" + password + "')")
+        conn.commit()
+        conn.close()
         return True
 
 def append_df_to_excel(df, excel_path):
@@ -136,8 +137,20 @@ def append_df_to_excel(df, excel_path):
     result = pd.concat([df_excel, df], ignore_index=True, sort=True)
     result.to_excel(excel_path, index=False)
 
+def create_database():
+    conn = sql.connect('database.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        password TEXT
+        )''')
+    conn.commit()
+    conn.close()
+
 if __name__ == '__main__':
     try:
+        create_database()
         choice = str(input("1. Authenticate\n2. Register\n3. Exit\n"))
         if str(choice) == "1":
             if authenticate():
