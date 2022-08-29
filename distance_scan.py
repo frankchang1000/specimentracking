@@ -7,6 +7,7 @@ import time
 import pandas as pd
 import datetime
 import sqlite3 as sql
+import shutil
 
 #initalize the led
 GPIO.setmode(GPIO.BCM)
@@ -113,7 +114,50 @@ def authenticate():
         print("Username does not exist")
         return False
 
+def asset_check():
+    # create table in database.db called assets
+    conn = sql.connect('database.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS assets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag INTEGER,
+        time TEXT
+        )''')
+    conn.commit()
 
+    # read tags
+    reader = initReader()
+    data = reader.read()
+
+    if(data):
+        b = data
+        s = str(b)[1:-1]
+        x = s.split("(")
+        x = x[1].split(")")
+        x = x[0]
+        x = str(x)[1:-1]
+        x = x.lstrip('\'')
+        print(x)
+
+        # check if tag is already in database.db and if the timestamp is less than 30 seconds old
+        conn = sql.connect('database.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM assets WHERE tag = '" + x + "'")
+        if c.fetchone():
+            c.execute("SELECT * FROM assets WHERE tag = '" + x + "' AND time > datetime('now', '-30 seconds')")
+            if c.fetchone():
+                print("Tag already in database")
+            else:
+                # update tag and timestamp in database.db
+                c.execute("UPDATE assets SET time = datetime('now') WHERE tag = '" + x + "'")
+                conn.commit()
+                conn.close()
+
+        else:
+            # write tag, current time to the database.db
+            c.execute("INSERT INTO assets (tag, time) VALUES ('" + x + "', datetime('now'))")
+            conn.commit()
+            conn.close()
 
 def register():
     username = str(input("Enter your username: "))
@@ -138,6 +182,10 @@ def append_df_to_excel(df, excel_path):
     result.to_excel(excel_path, index=False)
 
 def create_database():
+    #save database.db as a backup
+
+    backup()
+
     conn = sql.connect('database.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -148,10 +196,13 @@ def create_database():
     conn.commit()
     conn.close()
 
+def backup():
+    shutil.copy('database.db', 'backup.db')
+    
 if __name__ == '__main__':
     try:
         create_database()
-        choice = str(input("1. Authenticate\n2. Register\n3. Exit\n"))
+        choice = str(input("1. Authenticate\n2. Register\n3. Assets\n 4. Exit\n"))
         if str(choice) == "1":
             if authenticate():
                 checkIn = input("Checking in or out? (i/o): ")
@@ -164,6 +215,13 @@ if __name__ == '__main__':
                     GPIO.output(led, GPIO.LOW)
         elif choice == "2":
             register()
+        elif choice == "3":
+            if authenticate():
+                while True:
+                    dist = distance()
+                    if dist <= 20:
+                        asset_check()
+                    time.sleep(0.5)
         else:
             print("Exiting")
             GPIO.cleanup()
